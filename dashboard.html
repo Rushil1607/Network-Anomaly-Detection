@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Dashboard - BITS Bank</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .dashboard-card { background-color: #1f2937; border: 1px solid #374151; }
+        .scan-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.25);
+        }
+        .scan-button.off { background-color: #4f46e5; }
+        .scan-button.off:hover { background-color: #4338ca; }
+        .scan-button.on { background-color: #16a34a; }
+        .scan-button.on:hover { background-color: #15803d; }
+        .status-light {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            background-color: #6b7280; /* Gray */
+        }
+        .status-light.scanning { background-color: #f59e0b; animation: pulse 1.5s infinite; } /* Amber */
+        .status-light.safe { background-color: #22c55e; } /* Green */
+        .status-light.threat { background-color: #ef4444; animation: pulse-red 1s infinite; } /* Red */
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        @keyframes pulse-red {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { transform: scale(1.1); box-shadow: 0 0 5px 10px rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <!-- Header -->
+    <header class="bg-gray-900/80 backdrop-blur-sm shadow-lg sticky top-0 z-20">
+        <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+            <a href="/" class="flex items-center">
+                <i class="fas fa-university text-3xl text-indigo-400 mr-3"></i>
+                <span class="text-xl font-bold text-white">BITS Bank</span>
+            </a>
+            <div class="text-sm text-gray-400">Security Operations Center</div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto mt-8 p-4 sm:px-6 lg:px-8">
+        <h1 class="text-3xl font-bold text-white mb-6">Real-Time Network Monitoring</h1>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- AI Scan Control Panel -->
+            <div class="lg:col-span-1 dashboard-card rounded-lg p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">AI Threat Scanner</h2>
+                <p class="text-gray-400 mb-6">Activate the AI to begin scanning incoming network traffic data in real-time.</p>
+                <button id="ai-scan-toggle" class="scan-button off w-full py-4 text-lg font-bold text-white rounded-lg flex items-center justify-center">
+                    <i id="scan-icon" class="fas fa-power-off mr-3"></i>
+                    <span id="scan-button-text">Start AI Scan</span>
+                </button>
+            </div>
+
+            <!-- Status & Log -->
+            <div class="lg:col-span-2 dashboard-card rounded-lg p-6">
+                <h2 class="text-xl font-semibold text-white mb-4">Live Status</h2>
+                <div class="flex items-center text-lg mb-4">
+                    <div id="status-light" class="status-light"></div>
+                    <span id="scan-status-text" class="font-medium">Scanner is Offline</span>
+                </div>
+                <div class="bg-gray-900 rounded p-4 h-64 overflow-y-auto">
+                    <div id="log-container" class="text-sm font-mono text-gray-400">
+                        <!-- Logs will be appended here -->
+                        <p>> System ready. Press "Start AI Scan" to begin.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Custom Alert Modal -->
+    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-red-900 border-2 border-red-500 rounded-lg p-8 max-w-md text-center shadow-2xl">
+            <div class="text-6xl text-red-400 mb-4"><i class="fas fa-exclamation-triangle fa-beat"></i></div>
+            <h2 class="text-2xl font-bold text-white">Threat Detected!</h2>
+            <p id="alert-message" class="mt-2 text-red-200"></p>
+            <button id="close-modal" class="mt-6 px-6 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700">Acknowledge</button>
+        </div>
+    </div>
+
+
+    <script>
+        let scanActive = false;
+        let scanInterval = null;
+        let currentRowIndex = 0;
+        
+        const toggleButton = document.getElementById('ai-scan-toggle');
+        const scanButtonText = document.getElementById('scan-button-text');
+        const scanIcon = document.getElementById('scan-icon');
+        const statusText = document.getElementById('scan-status-text');
+        const statusLight = document.getElementById('status-light');
+        const logContainer = document.getElementById('log-container');
+        
+        // Modal elements
+        const alertModal = document.getElementById('alert-modal');
+        const alertMessage = document.getElementById('alert-message');
+        const closeModalButton = document.getElementById('close-modal');
+
+        function addLog(message, type = 'info') {
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString();
+            const p = document.createElement('p');
+            let typeColor = 'text-gray-400';
+            if (type === 'safe') typeColor = 'text-green-400';
+            if (type === 'threat') typeColor = 'text-red-400 font-bold';
+
+            p.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> <span class="${typeColor}">> ${message}</span>`;
+            logContainer.appendChild(p);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function showThreatAlert(malwareType) {
+            alertMessage.textContent = `Malicious activity classified as "${malwareType}" has been detected in the network traffic.`;
+            alertModal.classList.remove('hidden');
+        }
+        
+        closeModalButton.onclick = () => {
+            alertModal.classList.add('hidden');
+        };
+
+        toggleButton.onclick = function() {
+            scanActive = !scanActive;
+            
+            if (scanActive) {
+                // --- Start Scanning ---
+                toggleButton.classList.remove('off');
+                toggleButton.classList.add('on');
+                scanButtonText.textContent = 'Stop AI Scan';
+                scanIcon.className = 'fas fa-stop-circle mr-3';
+
+                statusText.textContent = 'Scanner is Active - Monitoring...';
+                statusLight.className = 'status-light scanning';
+                addLog('AI Scanner Activated. Starting real-time analysis...');
+
+                currentRowIndex = 0;
+                scanInterval = setInterval(scanNextRow, 1000);
+                scanNextRow(); // Scan the first row immediately
+
+            } else {
+                // --- Stop Scanning ---
+                clearInterval(scanInterval);
+                toggleButton.classList.remove('on');
+                toggleButton.classList.add('off');
+                scanButtonText.textContent = 'Start AI Scan';
+                scanIcon.className = 'fas fa-power-off mr-3';
+                statusText.textContent = 'Scanner is Offline';
+                statusLight.className = 'status-light';
+                addLog('AI Scanner Deactivated.');
+            }
+        };
+
+        async function scanNextRow() {
+            try {
+                const resp = await fetch(`/get_row?idx=${currentRowIndex}`);
+                if (!resp.ok) throw new Error(`HTTP error! status: ${resp.status}`);
+                const row = await resp.json();
+                
+                if (!row || Object.keys(row).length === 0) {
+                    addLog('End of dataset reached. Halting scan.', 'info');
+                    toggleButton.click(); // Programmatically stop the scan
+                    return;
+                }
+
+                addLog(`Analyzing traffic row #${currentRowIndex + 1} from source IP ${row['id.orig_h'] || 'N/A'}...`);
+                currentRowIndex++;
+
+                const predictResp = await fetch('/ai_scan_predict', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(row)
+                });
+                
+                if (!predictResp.ok) throw new Error(`Prediction error! status: ${predictResp.status}`);
+                
+                const data = await predictResp.json();
+
+                if (data.malware) {
+                    addLog(`THREAT DETECTED: ${data.malware}`, 'threat');
+                    statusText.textContent = `Threat Found: ${data.malware}`;
+                    statusLight.className = 'status-light threat';
+                    showThreatAlert(data.malware);
+                    // Optional: stop scanning on first threat
+                    // toggleButton.click(); 
+                } else {
+                    addLog('Traffic classified as Benign.', 'safe');
+                    statusText.textContent = 'Scanner is Active - All Clear';
+                    if (!alertModal.classList.contains('hidden')) {
+                        // Don't change light if modal is open
+                    } else {
+                       statusLight.className = 'status-light safe';
+                    }
+                }
+            } catch (error) {
+                console.error('Scan Error:', error);
+                addLog(`Error during scan: ${error.message}`, 'threat');
+                toggleButton.click();
+            }
+        }
+    </script>
+</body>
+</html>
